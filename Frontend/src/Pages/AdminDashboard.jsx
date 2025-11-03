@@ -36,9 +36,9 @@ const ackNotification = (id) => {
     persistAcked(next);
     return next;
   });
-  // remove clicked notification from dropdown
-  setNotifications((prev) => prev.filter((n) => n.id !== id));
+  // ✅ Do NOT remove the notification anymore
 };
+
 
 
 
@@ -136,16 +136,13 @@ const loadNotifications = async () => {
     });
     const data = await res.json();
 
-    // filter out already viewed notifications
-    const seen = new Set(
-      JSON.parse(localStorage.getItem("ackedOverdue") || "[]")
-    );
-    const list = Array.isArray(data) ? data.filter((n) => !seen.has(n.id)) : [];
-    setNotifications(list);
+    // ✅ Keep all notifications (seen + unseen)
+    setNotifications(Array.isArray(data) ? data : []);
   } catch (err) {
     console.error("❌ Notification load failed:", err);
   }
 };
+
 
 
 // ✅ Scroll to ticket when clicked in notification (supports pagination)
@@ -437,14 +434,15 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
         onClick={() => setShowNotifications(!showNotifications)}
       ></i>
 
-      {notifications.length > 0 && (
-        <span
-          className="position-absolute top-0 start-0 translate-middle badge rounded-pill bg-danger"
-          style={{ fontSize: "0.7rem" }}
-        >
-          {notifications.length}
-        </span>
-      )}
+     {notifications.length > 0 && (
+  <span
+    className="position-absolute top-0 start-0 translate-middle badge rounded-pill bg-danger"
+    style={{ fontSize: "0.7rem" }}
+  >
+    {notifications.filter((n) => !ackedIds.has(n.id)).length}
+  </span>
+)}
+
     </div>
   </div>
 </div>
@@ -460,7 +458,11 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
     }}
   >
     <h6 className="fw-semibold mb-2 text-primary">
-      Overdue Tickets ({notifications.length})
+      Overdue Tickets (
+      {
+        notifications.filter((n) => !ackedIds.has(n.id)).length
+      }
+      )
     </h6>
 
     <div style={{ maxHeight: "260px", overflowY: "auto" }}>
@@ -469,64 +471,71 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
           No overdue tickets 🎉
         </p>
       ) : (
-        notifications.map((n) => (
-          <div
-            key={n.id}
-            className="border-bottom py-2 small"
-            style={{
-              cursor: "pointer",
-              color: "#212529", // ✅ Text always visible on white background
-            }}
-           onClick={() => {
-  ackNotification(n.id);          // ✅ remove & reduce count
-  handleNotificationClick(n.id);  // ✅ scroll to ticket
-}}
-
-          >
-            {/* 🧾 Employee + Issue */}
-            <strong style={{ color: "#000" }}>{n.full_name}</strong> —{" "}
-            <span className="text-muted">
-              {n.remarks || "No issue mentioned"}
-            </span>
-            <br />
-
-            {/* 👨‍🔧 Technician + Status */}
-            <span className="d-block mt-1">
-              <strong style={{ color: "#000" }}>
-  {n.assigned_to_name || n.assigned_to || "Unassigned"}
-</strong>
-
-              —{" "}
-              <span
-                className={`badge ${
-                  n.status === "COMPLETE"
-                    ? "bg-success"
-                    : n.status === "REJECTED"
-                    ? "bg-danger"
-                    : n.status === "INPROCESS"
-                    ? "bg-warning text-dark"
-                    : n.status === "ASSIGNED"
-                    ? "bg-info text-dark"
-                    : "bg-secondary"
-                }`}
-              >
-                {n.status}
+        notifications.map((n) => {
+          const isSeen = ackedIds.has(n.id);
+          return (
+            <div
+              key={n.id}
+              className={`border-bottom py-2 small rounded-2 ${
+                isSeen ? "bg-light text-muted" : "bg-white"
+              }`}
+              style={{
+                cursor: "pointer",
+                color: isSeen ? "#6c757d" : "#212529",
+                transition: "background 0.3s",
+              }}
+              onClick={() => {
+                ackNotification(n.id);          // ✅ mark as seen
+                handleNotificationClick(n.id);  // ✅ scroll to ticket
+              }}
+            >
+              {/* 🧾 Employee + Issue */}
+              <strong style={{ color: isSeen ? "#6c757d" : "#000" }}>
+                {n.full_name}
+              </strong>{" "}
+              — <span className="text-muted">
+                {n.remarks || "No issue mentioned"}
               </span>
-            </span>
+              <br />
 
-            {/* 📅 End Date */}
-            <span className="text-danger fw-semibold d-block mt-1">
-              End:{" "}
-              {n.end_date
-                ? new Date(n.end_date).toLocaleDateString()
-                : "Not set"}
-            </span>
-          </div>
-        ))
+              {/* 👨‍🔧 Technician + Status */}
+              <span className="d-block mt-1">
+                <strong style={{ color: isSeen ? "#6c757d" : "#000" }}>
+                  {n.assigned_to_name || n.assigned_to || "Unassigned"}
+                </strong>{" "}
+                —{" "}
+                <span
+                  className={`badge ${
+                    n.status === "COMPLETE"
+                      ? "bg-success"
+                      : n.status === "REJECTED"
+                      ? "bg-danger"
+                      : n.status === "INPROCESS"
+                      ? "bg-warning text-dark"
+                      : n.status === "ASSIGNED"
+                      ? "bg-info text-dark"
+                      : "bg-secondary"
+                  }`}
+                >
+                  {n.status}
+                </span>
+              </span>
+
+              {/* 📅 End Date */}
+              <span className="text-danger fw-semibold d-block mt-1">
+                End:{" "}
+                {n.end_date
+                  ? new Date(n.end_date).toLocaleDateString()
+                  : "Not set"}
+              </span>
+            </div>
+          );
+        })
       )}
     </div>
   </div>
 )}
+
 
 
 
@@ -667,10 +676,22 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
               t.status !== "REJECTED" ? (
                 <button
                   className="btn btn-sm btn-info text-white"
-                  onClick={() => {
-                    setReminderTicket(t);
-                    setShowReminderModal(true);
-                  }}
+onClick={() => {
+  setReminderTicket(t);
+
+  const dueDate = t.end_date
+    ? new Date(t.end_date).toLocaleDateString()
+    : "N/A";
+
+  // ✅ Default message auto-filled when modal opens
+  setReminderMessage(
+    `Dear ${t.assigned_to || "Technician"},\n\nThis is a kind reminder regarding the following issue:\n\n"${t.remarks || t.issue_text || "No issue mentioned"}".\n\nIt was due on ${dueDate}. Please review and complete it as soon as possible.\n\n- ${managerName}`
+  );
+
+  setShowReminderModal(true);
+}}
+
+
                 >
                   Remind
                 </button>
@@ -987,7 +1008,7 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
       )}
 
 
-      {/* REMINDER MODAL */}
+{/* REMINDER MODAL */}
 {showReminderModal && reminderTicket && (
   <div
     className="modal fade show d-block"
@@ -995,6 +1016,7 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
   >
     <div className="modal-dialog modal-dialog-centered">
       <div className="modal-content border-0 shadow-lg rounded-4">
+        {/* 🔹 Header */}
         <div className="modal-header bg-info text-white rounded-top-4">
           <h5 className="modal-title">
             Reminder — {reminderTicket.assigned_to || "Technician"}
@@ -1003,26 +1025,34 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
             className="btn-close"
             onClick={() => {
               setShowReminderModal(false);
-              setReminderMessage("");
+              // ✅ Reset default message when modal closes
+              setReminderMessage("Please complete the assigned ticket soon.");
             }}
           ></button>
         </div>
+
+        {/* 🔹 Body */}
         <div className="modal-body">
           <p className="text-muted small mb-2">
-            Ticket ID: <strong>#{reminderTicket.id}</strong>
+            Ticket ID: <strong>{reminderTicket.id}</strong>
           </p>
           <textarea
-            rows="3"
+            rows="6"
             className="form-control"
             placeholder="Enter your reminder message to technician..."
             value={reminderMessage}
             onChange={(e) => setReminderMessage(e.target.value)}
           ></textarea>
         </div>
+
+        {/* 🔹 Footer */}
         <div className="modal-footer">
           <button
             className="btn btn-secondary"
-            onClick={() => setShowReminderModal(false)}
+            onClick={() => {
+              setShowReminderModal(false);
+              setReminderMessage("Please complete the assigned ticket soon.");
+            }}
           >
             Cancel
           </button>
@@ -1034,6 +1064,7 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
               try {
                 setMailLoading(true);
                 setMailMessage("Sending reminder to technician...");
+
                 const res = await fetch(
                   `${API}/api/admin/tickets/${reminderTicket.id}/remind`,
                   {
@@ -1045,6 +1076,7 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
                     body: JSON.stringify({ message: reminderMessage }),
                   }
                 );
+
                 const data = await res.json();
                 if (res.ok) {
                   showToast(
@@ -1052,7 +1084,10 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
                     `✅ Reminder sent to ${reminderTicket.assigned_to}`
                   );
                 } else {
-                  showToast("danger", data?.error || "Failed to send reminder");
+                  showToast(
+                    "danger",
+                    data?.error || "Failed to send reminder"
+                  );
                 }
               } catch (err) {
                 console.error("❌ Reminder error:", err);
@@ -1060,7 +1095,7 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
               } finally {
                 setMailLoading(false);
                 setShowReminderModal(false);
-                setReminderMessage("");
+                setReminderMessage("Please complete the assigned ticket soon.");
               }
             }}
           >
@@ -1071,6 +1106,7 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
     </div>
   </div>
 )}
+
 
 
       {/* 📩 Preloader Spinner Overlay */}

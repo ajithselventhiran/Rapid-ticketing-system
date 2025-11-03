@@ -55,21 +55,34 @@ const loadTickets = async (silent = false) => {
     const data = await res.json();
     const validData = Array.isArray(data) ? data : [];
 
-    // 🕒 Add daysLeft info
-    validData.forEach((t) => {
-      if (t.end_date) {
-        const end = new Date(t.end_date);
-        const today = new Date();
-        const diffDays = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
-        if (diffDays > 0)
-          t.daysLeft = `${diffDays} day${diffDays > 1 ? "s" : ""} left`;
-        else if (diffDays === 0) t.daysLeft = "Due today";
-        else
-          t.daysLeft = `Overdue by ${Math.abs(diffDays)} day${
-            Math.abs(diffDays) > 1 ? "s" : ""
-          }`;
-      } else t.daysLeft = "—";
-    });
+// 🕒 Add daysLeft info
+validData.forEach((t) => {
+  // ✅ If ticket is COMPLETE → skip due calculations
+  if ((t.status || "").toUpperCase() === "COMPLETE") {
+    t.daysLeft = "Done";
+    return; // stop here, don’t calculate further
+  }
+
+  // ✅ Otherwise, calculate due info normally
+  if (t.end_date) {
+    const end = new Date(t.end_date);
+    const today = new Date();
+    const diffDays = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 0) {
+      t.daysLeft = `${diffDays} day${diffDays > 1 ? "s" : ""} left`;
+    } else if (diffDays === 0) {
+      t.daysLeft = "Due today";
+    } else {
+      t.daysLeft = `Overdue by ${Math.abs(diffDays)} day${
+        Math.abs(diffDays) > 1 ? "s" : ""
+      }`;
+    }
+  } else {
+    t.daysLeft = "—";
+  }
+});
+
 
     // ✅ Compare with previous list before updating (avoid flicker)
     setAllTickets((prev) => {
@@ -392,19 +405,24 @@ useEffect(() => {
                           ? new Date(t.end_date).toLocaleDateString("en-IN")
                           : "—"}
                       </td>
-                      <td>
-                        <span
-                          className={`fw-semibold ${
-                            t.daysLeft.includes("Overdue")
-                              ? "text-danger"
-                              : t.daysLeft.includes("left")
-                              ? "text-success"
-                              : "text-warning"
-                          }`}
-                        >
-                          {t.daysLeft}
-                        </span>
-                      </td>
+                     <td>
+  {t.status === "COMPLETE" ? (
+    <span className="fw-semibold text-success"> Done</span>
+  ) : (
+    <span
+      className={`fw-semibold ${
+        t.daysLeft.includes("Overdue") || t.daysLeft.includes("Due today")
+          ? "text-danger" // 🔴 Red for overdue / due today
+          : t.daysLeft.includes("left")
+          ? "text-warning" // 🟡 Yellow for X days left
+          : "text-muted"
+      }`}
+    >
+      {t.daysLeft}
+    </span>
+  )}
+</td>
+
                       <td>
                         <span
                           className={`badge ${getStatusBadge(
