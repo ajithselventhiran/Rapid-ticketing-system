@@ -38,12 +38,53 @@ export default function TechnicianDashboard() {
   const [mailLoading, setMailLoading] = useState(false);
   const [mailMessage, setMailMessage] = useState("Processing...");
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    window.alert("You have been logged out.");
-    navigate("/login");
-  };
+const handleLogout = () => {
+  toast(
+    ({ closeToast }) => (
+      <div>
+        <p className="mb-2">You have been logged out.</p>
+        <div className="d-flex justify-content-end gap-2">
+          {/* Cancel Button */}
+          <button
+            className="btn btn-sm btn-outline-light"
+            onClick={() => {
+              // ❌ Do nothing, just close toast
+              closeToast();
+            }}
+          >
+            Cancel
+          </button>
+
+          {/* OK Button — actually logs out */}
+          <button
+            className="btn btn-sm btn-light text-dark"
+            onClick={() => {
+              // ✅ Remove login session only on OK
+              localStorage.removeItem("token");
+              localStorage.removeItem("user");
+
+              closeToast();
+              navigate("/login", { replace: true });
+            }}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    ),
+    {
+      autoClose: false,
+      closeOnClick: false,
+      pauseOnHover: false,
+      draggable: false,
+      closeButton: false,
+      hideProgressBar: true,
+      toastId: "logout-toast",
+      className: "bg-danger text-white",
+    }
+  );
+};
+
 
   const showToast = (type, text) => {
     const toastOptions = {

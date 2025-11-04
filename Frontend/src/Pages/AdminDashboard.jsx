@@ -60,14 +60,15 @@ const [reminderTicket, setReminderTicket] = useState(null);
   const [filter, setFilter] = useState("ALL");
   const [loading, setLoading] = useState(false);
   const [counts, setCounts] = useState({
-    ALL: 0,
-    NOT_ASSIGNED: 0,
-    ASSIGNED: 0,
-    PENDING: 0,
-    INPROCESS: 0,
-    COMPLETE: 0,
-    REJECTED: 0,
-  });
+  ALL: 0,
+  NOT_ASSIGNED: 0,
+  ASSIGNED: 0,
+  NOT_STARTED: 0,
+  INPROCESS: 0,
+  COMPLETE: 0,
+  REJECTED: 0,
+});
+
 
   // Modal States
   const [showModal, setShowModal] = useState(false);
@@ -91,12 +92,53 @@ const ticketsPerPage = 10; // 👉 show 10 tickets per page
 
   const token = localStorage.getItem("token");
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    window.alert("You have been logged out.");
-    navigate("/login");
-  };
+ const handleLogout = () => {
+  toast(
+    ({ closeToast }) => (
+      <div>
+        <p className="mb-2">You have been logged out.</p>
+        <div className="d-flex justify-content-end gap-2">
+          {/* Cancel Button */}
+          <button
+            className="btn btn-sm btn-outline-light"
+            onClick={() => {
+              // ❌ Do nothing, just close toast
+              closeToast();
+            }}
+          >
+            Cancel
+          </button>
+
+          {/* OK Button — actually logs out */}
+          <button
+            className="btn btn-sm btn-light text-dark"
+            onClick={() => {
+              // ✅ Remove session data only when OK is clicked
+              localStorage.removeItem("token");
+              localStorage.removeItem("user");
+
+              closeToast();
+              navigate("/login", { replace: true });
+            }}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    ),
+    {
+      autoClose: false,
+      closeOnClick: false,
+      pauseOnHover: false,
+      draggable: false,
+      closeButton: false,
+      hideProgressBar: true,
+      toastId: "logout-toast",
+      className: "bg-danger text-white",
+    }
+  );
+};
+
 
   // ✅ Play sound
 // ✅ Improved version - ensures browser plays the sound reliably
@@ -280,23 +322,24 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      const total =
-        (data?.NOT_ASSIGNED || 0) +
-        (data?.ASSIGNED || 0) +
-        (data?.PENDING || 0) +
-        (data?.INPROCESS || 0) +
-        (data?.COMPLETE || 0) +
-        (data?.REJECTED || 0);
+    const total =
+  (data?.NOT_ASSIGNED || 0) +
+  (data?.ASSIGNED || 0) +
+  (data?.NOT_STARTED || 0) +
+  (data?.INPROCESS || 0) +
+  (data?.COMPLETE || 0) +
+  (data?.REJECTED || 0);
 
-      setCounts({
-        ALL: total,
-        NOT_ASSIGNED: data?.NOT_ASSIGNED || 0,
-        ASSIGNED: data?.ASSIGNED || 0,
-        PENDING: data?.PENDING || 0,
-        INPROCESS: data?.INPROCESS || 0,
-        COMPLETE: data?.COMPLETE || 0,
-        REJECTED: data?.REJECTED || 0,
-      });
+setCounts({
+  ALL: total,
+  NOT_ASSIGNED: data?.NOT_ASSIGNED || 0,
+  ASSIGNED: data?.ASSIGNED || 0,
+  NOT_STARTED: data?.NOT_STARTED || 0,
+  INPROCESS: data?.INPROCESS || 0,
+  COMPLETE: data?.COMPLETE || 0,
+  REJECTED: data?.REJECTED || 0,
+});
+
     } catch (err) {
       console.error("❌ Load counts failed:", err);
     }
@@ -392,18 +435,19 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
     setRemarks("");
   };
 
-  const getStatusBadge = (status) => {
-    const map = {
-      ALL: "bg-secondary",
-      NOT_ASSIGNED: "bg-info text-dark",
-      ASSIGNED: "bg-warning text-dark",
-      PENDING: "bg-dark text-light",
-      INPROCESS: "bg-primary",
-      COMPLETE: "bg-success",
-      REJECTED: "bg-danger",
-    };
-    return map[status?.toUpperCase()] || "bg-secondary";
+const getStatusBadge = (status) => {
+  const map = {
+    ALL: "bg-secondary",
+    NOT_ASSIGNED: "bg-info text-dark",
+    ASSIGNED: "bg-warning text-dark",
+    NOT_STARTED: "bg-dark text-light", // ✅ புதியது
+    INPROCESS: "bg-primary",
+    COMPLETE: "bg-success",
+    REJECTED: "bg-danger",
   };
+  return map[status?.toUpperCase()] || "bg-secondary";
+};
+
 
   // Auto Refresh
  useEffect(() => {
@@ -427,15 +471,16 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
     loadCounts();
   }, []);
 
-  const statusOrder = [
-    "ALL",
-    "NOT_ASSIGNED",
-    "ASSIGNED",
-    "PENDING",
-    "INPROCESS",
-    "COMPLETE",
-    "REJECTED",
-  ];
+const statusOrder = [
+  "ALL",
+  "NOT_ASSIGNED",
+  "ASSIGNED",
+  "NOT_STARTED",
+  "INPROCESS",
+  "COMPLETE",
+  "REJECTED",
+];
+
 
   const unseenCount = notifications.reduce(
     (count, notification) => count + (ackedIds.has(notification.id) ? 0 : 1),
