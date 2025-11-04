@@ -50,6 +50,22 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
+CREATE TABLE IF NOT EXISTS notifications (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ticket_id INT NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  message TEXT,
+  type ENUM('OVERDUE','DUE_TODAY') NOT NULL DEFAULT 'OVERDUE',
+  seen TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_notif_ticket FOREIGN KEY (ticket_id)
+    REFERENCES tickets(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE UNIQUE INDEX ux_notif_ticket_type ON notifications (ticket_id, type);
+
+
 
 INSERT INTO users (username, password, role, full_name, emp_id, department, reporting_to, email, mail_pass)
 VALUES

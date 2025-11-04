@@ -7,6 +7,12 @@ import "react-toastify/dist/ReactToastify.css";
 
 const API = "http://localhost:5000";
 
+const TABLE_SCROLL_STYLE = {
+  maxHeight: "35rem",
+  overflowY: "auto",
+  overflowX: "auto",
+};
+
 export default function TechnicianDashboard() {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
@@ -444,7 +450,7 @@ useEffect(() => {
         </div>
 
         <div className="card-body p-0">
-          <div className="table-responsive">
+          <div className="table-responsive" style={TABLE_SCROLL_STYLE}>
             <table className="table table-hover align-middle mb-0">
               <thead className="table-success text-center">
                 <tr>
