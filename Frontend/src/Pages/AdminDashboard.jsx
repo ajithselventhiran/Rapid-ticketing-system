@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ToastContainer, toast } from "react-toastify";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap-icons/font/bootstrap-icons.css"; // ✅ for bell icon
 import "../Style/animations.css";
+import "react-toastify/dist/ReactToastify.css";
 
 
 
@@ -9,6 +12,7 @@ import "../Style/animations.css";
 const API = "http://localhost:5000"; // 🔗 Backend API
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const managerName = user.display_name || "Admin";
   // 🔔 Notifications
@@ -83,10 +87,16 @@ const ticketsPerPage = 10; // 👉 show 10 tickets per page
   // Mail / process loading
   const [mailLoading, setMailLoading] = useState(false);
   const [mailMessage, setMailMessage] = useState("Processing...");
-  const [toast, setToast] = useState({ show: false, type: "", text: "" });
   const [showSuccessIcon, setShowSuccessIcon] = useState(false);
 
   const token = localStorage.getItem("token");
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.alert("You have been logged out.");
+    navigate("/login");
+  };
 
   // ✅ Play sound
 // ✅ Improved version - ensures browser plays the sound reliably
@@ -118,13 +128,37 @@ const playSuccessSound = () => {
 
 
   const showToast = (type, text) => {
-    setToast({ show: true, type, text });
-    if (type === "success") {
+    const toastOptions = {
+      position: "top-right",
+      autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      theme: "colored",
+    };
+
+    const normalizedType = (type || "").toLowerCase();
+
+    if (normalizedType === "success") {
+      toast.success(text, toastOptions);
       playSuccessSound();
       setShowSuccessIcon(true);
       setTimeout(() => setShowSuccessIcon(false), 1500);
+      return;
     }
-    setTimeout(() => setToast({ show: false, type: "", text: "" }), 3000);
+
+    if (normalizedType === "warning") {
+      toast.warning(text, toastOptions);
+      return;
+    }
+
+    if (normalizedType === "info") {
+      toast.info(text, toastOptions);
+      return;
+    }
+
+    toast.error(text, toastOptions);
   };
 
 
@@ -403,6 +437,22 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
     "REJECTED",
   ];
 
+  const unseenCount = notifications.reduce(
+    (count, notification) => count + (ackedIds.has(notification.id) ? 0 : 1),
+    0
+  );
+
+  const sortedNotifications = [...notifications].sort((a, b) => {
+    const dateA = a.end_date ? new Date(a.end_date).getTime() : 0;
+    const dateB = b.end_date ? new Date(b.end_date).getTime() : 0;
+
+    if (dateA === dateB) {
+      return (b.id || 0) - (a.id || 0);
+    }
+
+    return dateB - dateA;
+  });
+
   return (
     <div
       className="container-fluid py-4"
@@ -428,22 +478,31 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
     <div className="position-relative">
       <i
         className={`bi bi-bell-fill fs-4 ${
-          notifications.length > 0 ? "text-warning animate-bell" : "text-light"
+          unseenCount > 0 ? "text-warning animate-bell" : "text-light"
         }`}
         style={{ cursor: "pointer" }}
         onClick={() => setShowNotifications(!showNotifications)}
       ></i>
 
-     {notifications.length > 0 && (
-  <span
-    className="position-absolute top-0 start-0 translate-middle badge rounded-pill bg-danger"
-    style={{ fontSize: "0.7rem" }}
-  >
-    {notifications.filter((n) => !ackedIds.has(n.id)).length}
-  </span>
-)}
+      {unseenCount > 0 && (
+        <span
+          className="position-absolute top-0 start-0 translate-middle badge rounded-pill bg-danger"
+          style={{ fontSize: "0.7rem" }}
+        >
+          {unseenCount}
+        </span>
+      )}
 
     </div>
+    <button
+      type="button"
+      className="btn btn-outline-light btn-sm d-flex align-items-center gap-2"
+      onClick={handleLogout}
+      aria-label="Logout"
+    >
+      <i className="bi bi-box-arrow-right"></i>
+      <span>Logout</span>
+    </button>
   </div>
 </div>
 
@@ -460,18 +519,18 @@ const paginate = (pageNumber) => setCurrentPage(pageNumber);
     <h6 className="fw-semibold mb-2 text-primary">
       Overdue Tickets (
       {
-        notifications.filter((n) => !ackedIds.has(n.id)).length
+        unseenCount
       }
       )
     </h6>
 
     <div style={{ maxHeight: "260px", overflowY: "auto" }}>
-      {notifications.length === 0 ? (
+      {sortedNotifications.length === 0 ? (
         <p className="text-muted small text-center mb-0">
           No overdue tickets 🎉
         </p>
       ) : (
-        notifications.map((n) => {
+        sortedNotifications.map((n) => {
           const isSeen = ackedIds.has(n.id);
           return (
             <div
@@ -1137,26 +1196,19 @@ onClick={() => {
         </div>
       )}
 
-      {/* Toast Notification */}
-      {toast.show && (
-        <div
-          className={`toast align-items-center text-white bg-${toast.type} position-fixed top-0 end-0 m-3 show`}
-          role="alert"
-          style={{ zIndex: 3000, minWidth: "250px" }}
-        >
-          <div className="d-flex">
-            <div className="toast-body fw-semibold">{toast.text}</div>
-            <button
-              type="button"
-              className="btn-close btn-close-white me-2 m-auto"
-              onClick={() => setToast({ show: false, type: "", text: "" })}
-            ></button>
-          </div>
-        </div>
-      )}
-      
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        pauseOnHover
+        draggable
+        theme="colored"
+      />
     </div>
   );
 }
+
 
 

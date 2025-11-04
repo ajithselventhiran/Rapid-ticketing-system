@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ToastContainer, toast } from "react-toastify";
 import "bootstrap/dist/css/bootstrap.min.css";
+import "bootstrap-icons/font/bootstrap-icons.css";
+import "react-toastify/dist/ReactToastify.css";
 
 const API = "http://localhost:5000";
 
 export default function TechnicianDashboard() {
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [filter, setFilter] = useState("ALL");
   const [dueFilter, setDueFilter] = useState("ALL_DUE");
@@ -32,11 +37,43 @@ export default function TechnicianDashboard() {
 
   const [mailLoading, setMailLoading] = useState(false);
   const [mailMessage, setMailMessage] = useState("Processing...");
-  const [toast, setToast] = useState({ show: false, type: "", text: "" });
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.alert("You have been logged out.");
+    navigate("/login");
+  };
 
   const showToast = (type, text) => {
-    setToast({ show: true, type, text });
-    setTimeout(() => setToast({ show: false, type: "", text: "" }), 3000);
+    const toastOptions = {
+      position: "top-right",
+      autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      theme: "colored",
+    };
+
+    const normalizedType = (type || "").toLowerCase();
+
+    if (normalizedType === "success") {
+      toast.success(text, toastOptions);
+      return;
+    }
+
+    if (normalizedType === "warning") {
+      toast.warning(text, toastOptions);
+      return;
+    }
+
+    if (normalizedType === "info") {
+      toast.info(text, toastOptions);
+      return;
+    }
+
+    toast.error(text, toastOptions);
   };
 
   useEffect(() => {
@@ -276,8 +313,19 @@ useEffect(() => {
         }}
       >
         <div className="d-flex justify-content-between align-items-center flex-wrap">
-          <h3 className="fw-bold mb-0">Technician Dashboard — {techName}</h3>
-          <small>{new Date().toLocaleString("en-IN")}</small>
+          <h3 className="fw-bold mb-0">Technician Dashboard - {techName}</h3>
+          <div className="d-flex align-items-center gap-3">
+            <small>{new Date().toLocaleString("en-IN")}</small>
+            <button
+              type="button"
+              className="btn btn-outline-light btn-sm d-flex align-items-center gap-2"
+              onClick={handleLogout}
+              aria-label="Logout"
+            >
+              <i className="bi bi-box-arrow-right"></i>
+              <span>Logout</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -704,23 +752,16 @@ useEffect(() => {
         </div>
       )}
 
-      {/* TOAST */}
-      {toast.show && (
-        <div
-          className={`toast align-items-center text-white bg-${toast.type} position-fixed top-0 end-0 m-3 show`}
-          role="alert"
-          style={{ zIndex: 3000, minWidth: "250px" }}
-        >
-          <div className="d-flex">
-            <div className="toast-body fw-semibold">{toast.text}</div>
-            <button
-              type="button"
-              className="btn-close btn-close-white me-2 m-auto"
-              onClick={() => setToast({ show: false, type: "", text: "" })}
-            ></button>
-          </div>
-        </div>
-      )}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        pauseOnHover
+        draggable
+        theme="colored"
+      />
     </div>
   );
 }
