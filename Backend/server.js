@@ -4,6 +4,8 @@ import mysql from "mysql2/promise";
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
+import { refreshNotifications } from "./utils/notifications.js";
+
 
 dotenv.config();
 
@@ -22,6 +24,25 @@ const pool = mysql.createPool({
   connectionLimit: 10,
 });
 
+(async () => {
+  try {
+    await refreshNotifications(pool);
+    console.log("🔔 Notifications refreshed at startup");
+  } catch (e) {
+    console.warn("⚠️ Notification refresh failed:", e.message);
+  }
+})();
+
+// ஒவ்வொரு 5 நிமிஷத்துக்கும் refresh ஆகணும்
+setInterval(async () => {
+  try {
+    await refreshNotifications(pool);
+  } catch (e) {
+    console.warn("⚠️ Auto refresh failed:", e.message);
+  }
+}, 5 * 60 * 1000);
+
+
 //  Test Database Connection
 (async () => {
   try {
@@ -34,6 +55,8 @@ const pool = mysql.createPool({
     process.exit(1);
   }
 })();
+
+
 
 
 // Health Testing
@@ -323,47 +346,33 @@ app.get("/api/admin/tickets", auth, async (req, res) => {
 
 // ======================================================
 // 🔔 ADMIN — Notifications: overdue tickets
-// ======================================================
-// ======================================================
-// 🔔 ADMIN — Notifications: overdue tickets (with issue + technician name)
-// ======================================================
 app.get("/api/admin/notifications", auth, async (req, res) => {
   try {
     if (req.user.role !== "ADMIN")
       return res.status(403).json({ error: "Access denied" });
 
-    const manager = req.user.display_name;
-    const today = new Date().toISOString().split("T")[0];
-
-    const [rows] = await pool.query(
-      `
-      SELECT 
-        t.id,
-        t.emp_id,
-        t.full_name,
-        t.issue_text AS remarks,       -- 📝 show issue in notifications
-        t.assigned_to,                 -- technician username/fullname stored in ticket
-        tech.full_name AS assigned_to_name,  -- joined technician full name
-        t.end_date,
-        t.status
-      FROM tickets t
-      LEFT JOIN users tech 
+    const [rows] = await pool.query(`
+      SELECT
+        n.id, n.ticket_id, n.title, n.message, n.type, n.seen, n.created_at,
+        t.emp_id, t.full_name, t.assigned_to,
+        tech.full_name AS assigned_to_name,
+        t.status, t.end_date, t.remarks
+      FROM notifications n
+      JOIN tickets t ON t.id = n.ticket_id
+      LEFT JOIN users tech
         ON tech.username = t.assigned_to OR tech.full_name = t.assigned_to
-      WHERE t.reporting_to = ?
-        AND t.end_date IS NOT NULL
-        AND t.end_date < ?
-        AND t.status NOT IN ('COMPLETE', 'REJECTED')
-      ORDER BY t.end_date ASC
-      `,
-      [manager, today]
-    );
+      WHERE n.created_at >= NOW() - INTERVAL 3 DAY
+        AND t.reporting_to = ?
+      ORDER BY n.type DESC, n.created_at DESC
+    `, [req.user.display_name]);
 
     res.json(rows);
-  } catch (err) {
-    console.error("❌ Notifications error:", err);
+  } catch (e) {
+    console.error("❌ Notifications load failed:", e);
     res.status(500).json({ error: "Failed to load notifications" });
   }
 });
+
 
 
 // ======================================================
@@ -454,6 +463,16 @@ app.post("/api/admin/tickets/:id/remind", auth, async (req, res) => {
     res.status(500).json({ error: "Failed to send reminder mail" });
   }
 });
+
+app.patch("/api/admin/notifications/:id/seen", auth, async (req, res) => {
+  try {
+    await pool.query("UPDATE notifications SET seen=1 WHERE id=?", [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "Seen update failed" });
+  }
+});
+
 
 
 

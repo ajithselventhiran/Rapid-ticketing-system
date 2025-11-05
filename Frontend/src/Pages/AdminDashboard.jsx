@@ -20,6 +20,12 @@ const [notifications, setNotifications] = useState([]);
 const [showNotifications, setShowNotifications] = useState(false);
 
 
+const [scrollTarget, setScrollTarget] = useState(null);
+const [pendingScroll, setPendingScroll] = useState(false); // ✅ new state
+
+
+
+
 // ✅ Seen notifications stored in localStorage (so count reduces permanently)
 const [ackedIds, setAckedIds] = useState(() => {
   try {
@@ -221,48 +227,65 @@ const loadNotifications = async () => {
 
 
 
-// ✅ Scroll to ticket when clicked in notification (supports pagination)
 const handleNotificationClick = (ticketId) => {
-  // Close notification popup
   setShowNotifications(false);
 
-  setTimeout(() => {
-    // Remove previous highlights
-    document
-      .querySelectorAll(".highlight-ticket")
-      .forEach((r) => r.classList.remove("highlight-ticket"));
+  const ticketIndex = tickets.findIndex((t) => t.id === ticketId);
+  if (ticketIndex === -1) return;
 
-    // 🔹 Find the index of the ticket in full ticket list
-    const ticketIndex = tickets.findIndex((t) => t.id === ticketId);
-    if (ticketIndex === -1) return; // not found
+  const targetPage = Math.floor(ticketIndex / ticketsPerPage) + 1;
+  setScrollTarget(ticketId);
 
-    // 🔹 Calculate which page that ticket belongs to
-    const targetPage = Math.floor(ticketIndex / ticketsPerPage) + 1;
+  if (currentPage !== targetPage) {
+    setCurrentPage(targetPage);
+  }
 
-    // 🔹 If ticket is on another page, switch page first
-    if (currentPage !== targetPage) {
-      setCurrentPage(targetPage);
-
-      // Wait for new page to render, then scroll
-      setTimeout(() => {
-        const row = document.getElementById(`ticket-row-${ticketId}`);
-        if (row) {
-          row.scrollIntoView({ behavior: "smooth", block: "center" });
-          row.classList.add("highlight-ticket");
-          setTimeout(() => row.classList.remove("highlight-ticket"), 4000);
-        }
-      }, 600);
-    } else {
-      // Same page → scroll directly
-      const row = document.getElementById(`ticket-row-${ticketId}`);
-      if (row) {
-        row.scrollIntoView({ behavior: "smooth", block: "center" });
-        row.classList.add("highlight-ticket");
-        setTimeout(() => row.classList.remove("highlight-ticket"), 4000);
-      }
-    }
-  }, 300);
+  setPendingScroll(true); // Trigger scroll once the row is ready
 };
+
+useEffect(() => {
+  if (!pendingScroll || !scrollTarget) return;
+
+  let attempts = 0;
+  let retryTimeout;
+  let highlightTimeout;
+
+  const tryScroll = () => {
+    const row = document.getElementById(`ticket-row-${scrollTarget}`);
+
+    if (!row) {
+      attempts += 1;
+      if (attempts > 12) {
+        setPendingScroll(false);
+        setScrollTarget(null);
+        return;
+      }
+      retryTimeout = setTimeout(tryScroll, 150);
+      return;
+    }
+
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.classList.add("highlight-ticket");
+    row.style.transition = "transform 0.35s ease";
+    row.style.transform = "scale(1.04)";
+
+    highlightTimeout = setTimeout(() => {
+      row.classList.remove("highlight-ticket");
+      row.style.transition = "";
+      row.style.transform = "";
+    }, 3200);
+
+    setPendingScroll(false);
+    setScrollTarget(null);
+  };
+
+  tryScroll();
+
+  return () => {
+    if (retryTimeout) clearTimeout(retryTimeout);
+    if (highlightTimeout) clearTimeout(highlightTimeout);
+  };
+}, [pendingScroll, scrollTarget, currentPage, tickets.length]);
 
 
 
@@ -588,10 +611,25 @@ const statusOrder = [
                 color: isSeen ? "#6c757d" : "#212529",
                 transition: "background 0.3s",
               }}
-              onClick={() => {
-                ackNotification(n.id);          // ✅ mark as seen
-                handleNotificationClick(n.id);  // ✅ scroll to ticket
-              }}
+             onClick={async () => {
+  // ✅ 1. Mark locally (so UI updates immediately)
+  ackNotification(n.id);
+
+  // ✅ 2. Scroll to ticket
+  handleNotificationClick(n.id);
+
+  // ✅ 3. Mark as seen in backend DB
+  try {
+    await fetch(`${API}/api/admin/notifications/${n.id}/seen`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    console.log(`🔔 Notification ${n.id} marked as seen`);
+  } catch (err) {
+    console.warn("❌ Failed to update seen status:", err);
+  }
+}}
+
             >
               {/* 🧾 Employee + Issue */}
               <strong style={{ color: isSeen ? "#6c757d" : "#000" }}>
