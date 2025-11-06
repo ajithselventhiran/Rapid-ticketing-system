@@ -248,7 +248,7 @@ useEffect(() => {
 
   let attempts = 0;
   let retryTimeout;
-  let highlightTimeout;
+  let zoomTimeout;
 
   const tryScroll = () => {
     const row = document.getElementById(`ticket-row-${scrollTarget}`);
@@ -264,16 +264,20 @@ useEffect(() => {
       return;
     }
 
+    // ✅ Smooth scroll to ticket row
     row.scrollIntoView({ behavior: "smooth", block: "center" });
-    row.classList.add("highlight-ticket");
-    row.style.transition = "transform 0.35s ease";
-    row.style.transform = "scale(1.04)";
 
-    highlightTimeout = setTimeout(() => {
-      row.classList.remove("highlight-ticket");
-      row.style.transition = "";
-      row.style.transform = "";
-    }, 3200);
+    // ✅ Restart the 3x zoom animation cleanly every time
+    row.classList.remove("zoom3x");
+    row.style.animation = "none";
+    void row.offsetHeight; // Force reflow to restart animation
+    row.style.animation = "";
+    row.classList.add("zoom3x");
+
+    // ✅ Clear state after animation done
+    zoomTimeout = setTimeout(() => {
+      row.classList.remove("zoom3x");
+    }, 2200); // match animation duration
 
     setPendingScroll(false);
     setScrollTarget(null);
@@ -283,11 +287,9 @@ useEffect(() => {
 
   return () => {
     if (retryTimeout) clearTimeout(retryTimeout);
-    if (highlightTimeout) clearTimeout(highlightTimeout);
+    if (zoomTimeout) clearTimeout(zoomTimeout);
   };
 }, [pendingScroll, scrollTarget, currentPage, tickets.length]);
-
-
 
 
 // ✅ Pagination Logic
