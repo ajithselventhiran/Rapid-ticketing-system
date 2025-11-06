@@ -12,7 +12,6 @@ export default function LoginPage() {
   const [form, setForm] = useState({ username: "", password: "" });
   const [loading, setLoading] = useState(false);
 
-  // âœ… Handle Login (Logic same)
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.username || !form.password)
@@ -45,7 +44,10 @@ export default function LoginPage() {
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(fullUser));
 
-      toast.success("âœ… Login successful!", { autoClose: 1000, theme: "colored" });
+      toast.success("âœ… Login successful!", {
+        autoClose: 1000,
+        theme: "colored",
+      });
 
       setTimeout(() => {
         if (user.role === "ADMIN") {
@@ -64,6 +66,7 @@ export default function LoginPage() {
     }
   };
 
+  
   return (
     <div
       className="d-flex justify-content-center align-items-center min-vh-100"
@@ -82,7 +85,10 @@ export default function LoginPage() {
             backdropFilter: "blur(3px)",
           }}
         >
-          <div className="spinner-border text-info" style={{ width: "3rem", height: "3rem" }}></div>
+          <div
+            className="spinner-border text-info"
+            style={{ width: "3rem", height: "3rem" }}
+          ></div>
         </div>
       )}
 

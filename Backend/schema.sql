@@ -1,4 +1,3 @@
---  DATABASE 
 CREATE DATABASE IF NOT EXISTS rapid_ticket_db
   DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -43,30 +42,15 @@ CREATE TABLE `tickets` (
   `end_date` date DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `notification` tinyint(1) DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_emp_id` (`emp_id`),
   KEY `idx_department` (`department`),
   KEY `idx_status` (`status`),
   CONSTRAINT `fk_ticket_user` FOREIGN KEY (`emp_id`) REFERENCES `users` (`emp_id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=36 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=59 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
-
-
-CREATE TABLE IF NOT EXISTS notifications (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  ticket_id INT NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  message TEXT,
-  type ENUM('OVERDUE','DUE_TODAY') NOT NULL DEFAULT 'OVERDUE',
-  seen TINYINT(1) NOT NULL DEFAULT 0,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_notif_ticket FOREIGN KEY (ticket_id)
-    REFERENCES tickets(id) ON DELETE CASCADE ON UPDATE CASCADE
-);
-
-CREATE UNIQUE INDEX ux_notif_ticket_type ON notifications (ticket_id, type);
 
 
 

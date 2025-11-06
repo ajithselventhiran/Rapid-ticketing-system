@@ -44,53 +44,52 @@ export default function TechnicianDashboard() {
   const [mailLoading, setMailLoading] = useState(false);
   const [mailMessage, setMailMessage] = useState("Processing...");
 
-const handleLogout = () => {
-  toast(
-    ({ closeToast }) => (
-      <div>
-        <p className="mb-2">You have been logged out.</p>
-        <div className="d-flex justify-content-end gap-2">
-          {/* Cancel Button */}
-          <button
-            className="btn btn-sm btn-outline-light"
-            onClick={() => {
-              // ❌ Do nothing, just close toast
-              closeToast();
-            }}
-          >
-            Cancel
-          </button>
+  const handleLogout = () => {
+    toast(
+      ({ closeToast }) => (
+        <div>
+          <p className="mb-2">You have been logged out.</p>
+          <div className="d-flex justify-content-end gap-2">
+            {/* Cancel Button */}
+            <button
+              className="btn btn-sm btn-outline-light"
+              onClick={() => {
+                // ❌ Do nothing, just close toast
+                closeToast();
+              }}
+            >
+              Cancel
+            </button>
 
-          {/* OK Button — actually logs out */}
-          <button
-            className="btn btn-sm btn-light text-dark"
-            onClick={() => {
-              // ✅ Remove login session only on OK
-              localStorage.removeItem("token");
-              localStorage.removeItem("user");
+            {/* OK Button — actually logs out */}
+            <button
+              className="btn btn-sm btn-light text-dark"
+              onClick={() => {
+                // ✅ Remove login session only on OK
+                localStorage.removeItem("token");
+                localStorage.removeItem("user");
 
-              closeToast();
-              navigate("/login", { replace: true });
-            }}
-          >
-            OK
-          </button>
+                closeToast();
+                navigate("/login", { replace: true });
+              }}
+            >
+              OK
+            </button>
+          </div>
         </div>
-      </div>
-    ),
-    {
-      autoClose: false,
-      closeOnClick: false,
-      pauseOnHover: false,
-      draggable: false,
-      closeButton: false,
-      hideProgressBar: true,
-      toastId: "logout-toast",
-      className: "bg-danger text-white",
-    }
-  );
-};
-
+      ),
+      {
+        autoClose: false,
+        closeOnClick: false,
+        pauseOnHover: false,
+        draggable: false,
+        closeButton: false,
+        hideProgressBar: true,
+        toastId: "logout-toast",
+        className: "bg-danger text-white",
+      }
+    );
+  };
 
   const showToast = (type, text) => {
     const toastOptions = {
@@ -127,110 +126,108 @@ const handleLogout = () => {
     const userData = JSON.parse(localStorage.getItem("user") || "{}");
     setTechName(userData?.display_name || userData?.username || "Technician");
   }, []);
-// 🧩 Load Tickets (Admin-style refresh, avoids unnecessary re-render)
-const loadTickets = async (silent = false) => {
-  if (!silent) setLoading(true);
-  try {
-    const token = localStorage.getItem("token");
-    const res = await fetch(`${API}/api/technician/my-tickets`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) throw new Error("Failed to load tickets");
-    const data = await res.json();
-    const validData = Array.isArray(data) ? data : [];
+  // 🧩 Load Tickets (Admin-style refresh, avoids unnecessary re-render)
+  const loadTickets = async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/api/technician/my-tickets`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load tickets");
+      const data = await res.json();
+      const validData = Array.isArray(data) ? data : [];
 
-// 🕒 Add daysLeft info
-validData.forEach((t) => {
-  // ✅ If ticket is COMPLETE → skip due calculations
-  if ((t.status || "").toUpperCase() === "COMPLETE") {
-    t.daysLeft = "Done";
-    return; // stop here, don’t calculate further
-  }
+      // 🕒 Add daysLeft info
+      validData.forEach((t) => {
+        // ✅ If ticket is COMPLETE → skip due calculations
+        if ((t.status || "").toUpperCase() === "COMPLETE") {
+          t.daysLeft = "Done";
+          return; // stop here, don’t calculate further
+        }
 
-  // ✅ Otherwise, calculate due info normally
-  if (t.end_date) {
-    const end = new Date(t.end_date);
-    const today = new Date();
-    const diffDays = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
+        // ✅ Otherwise, calculate due info normally
+        if (t.end_date) {
+          const end = new Date(t.end_date);
+          const today = new Date();
+          const diffDays = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
 
-    if (diffDays > 0) {
-      t.daysLeft = `${diffDays} day${diffDays > 1 ? "s" : ""} left`;
-    } else if (diffDays === 0) {
-      t.daysLeft = "Due today";
-    } else {
-      t.daysLeft = `Overdue by ${Math.abs(diffDays)} day${
-        Math.abs(diffDays) > 1 ? "s" : ""
-      }`;
+          if (diffDays > 0) {
+            t.daysLeft = `${diffDays} day${diffDays > 1 ? "s" : ""} left`;
+          } else if (diffDays === 0) {
+            t.daysLeft = "Due today";
+          } else {
+            t.daysLeft = `Overdue by ${Math.abs(diffDays)} day${
+              Math.abs(diffDays) > 1 ? "s" : ""
+            }`;
+          }
+        } else {
+          t.daysLeft = "—";
+        }
+      });
+
+      // ✅ Compare with previous list before updating (avoid flicker)
+      setAllTickets((prev) => {
+        const prevKey = prev.map((t) => `${t.id}-${t.status}`).join(",");
+        const newKey = validData.map((t) => `${t.id}-${t.status}`).join(",");
+        if (prevKey === newKey) return prev; // no change → no update
+        return validData;
+      });
+
+      calculateCounts(validData);
+      applyFilter(validData, filter, dueFilter);
+    } catch (err) {
+      console.error("❌ Ticket load failed:", err);
+      showToast("danger", "Failed to load tickets");
+    } finally {
+      if (!silent) setLoading(false);
     }
-  } else {
-    t.daysLeft = "—";
-  }
-});
+  };
 
+  // 🧩 Apply Filter (Admin-style — skip update if no change)
+  const applyFilter = (data, selectedFilter, selectedDueFilter = dueFilter) => {
+    let filtered = data;
 
-    // ✅ Compare with previous list before updating (avoid flicker)
-    setAllTickets((prev) => {
+    // Filter by status
+    if (selectedFilter !== "ALL") {
+      filtered = filtered.filter(
+        (t) => (t.status || "").toUpperCase() === selectedFilter
+      );
+    }
+
+    // Filter by due date type
+    const today = new Date().setHours(0, 0, 0, 0);
+    if (selectedDueFilter === "OVERDUE") {
+      filtered = filtered.filter(
+        (t) =>
+          t.end_date &&
+          new Date(t.end_date).setHours(0, 0, 0, 0) < today &&
+          t.status !== "COMPLETE"
+      );
+    } else if (selectedDueFilter === "DUE_TODAY") {
+      filtered = filtered.filter(
+        (t) =>
+          t.end_date &&
+          new Date(t.end_date).setHours(0, 0, 0, 0) === today &&
+          t.status !== "COMPLETE"
+      );
+    } else if (selectedDueFilter === "UPCOMING") {
+      filtered = filtered.filter(
+        (t) =>
+          t.end_date &&
+          new Date(t.end_date).setHours(0, 0, 0, 0) > today &&
+          t.status !== "COMPLETE"
+      );
+    }
+
+    // ✅ Update only if list actually changed
+    setTickets((prev) => {
       const prevKey = prev.map((t) => `${t.id}-${t.status}`).join(",");
-      const newKey = validData.map((t) => `${t.id}-${t.status}`).join(",");
-      if (prevKey === newKey) return prev; // no change → no update
-      return validData;
+      const newKey = filtered.map((t) => `${t.id}-${t.status}`).join(",");
+      if (prevKey === newKey) return prev; // avoid flicker
+      return filtered;
     });
-
-    calculateCounts(validData);
-    applyFilter(validData, filter, dueFilter);
-  } catch (err) {
-    console.error("❌ Ticket load failed:", err);
-    showToast("danger", "Failed to load tickets");
-  } finally {
-    if (!silent) setLoading(false);
-  }
-};
-
-// 🧩 Apply Filter (Admin-style — skip update if no change)
-const applyFilter = (data, selectedFilter, selectedDueFilter = dueFilter) => {
-  let filtered = data;
-
-  // Filter by status
-  if (selectedFilter !== "ALL") {
-    filtered = filtered.filter(
-      (t) => (t.status || "").toUpperCase() === selectedFilter
-    );
-  }
-
-  // Filter by due date type
-  const today = new Date().setHours(0, 0, 0, 0);
-  if (selectedDueFilter === "OVERDUE") {
-    filtered = filtered.filter(
-      (t) =>
-        t.end_date &&
-        new Date(t.end_date).setHours(0, 0, 0, 0) < today &&
-        t.status !== "COMPLETE"
-    );
-  } else if (selectedDueFilter === "DUE_TODAY") {
-    filtered = filtered.filter(
-      (t) =>
-        t.end_date &&
-        new Date(t.end_date).setHours(0, 0, 0, 0) === today &&
-        t.status !== "COMPLETE"
-    );
-  } else if (selectedDueFilter === "UPCOMING") {
-    filtered = filtered.filter(
-      (t) =>
-        t.end_date &&
-        new Date(t.end_date).setHours(0, 0, 0, 0) > today &&
-        t.status !== "COMPLETE"
-    );
-  }
-
-  // ✅ Update only if list actually changed
-  setTickets((prev) => {
-    const prevKey = prev.map((t) => `${t.id}-${t.status}`).join(",");
-    const newKey = filtered.map((t) => `${t.id}-${t.status}`).join(",");
-    if (prevKey === newKey) return prev; // avoid flicker
-    return filtered;
-  });
-};
-
+  };
 
   const calculateCounts = (data) => {
     const grouped = data.reduce(
@@ -257,17 +254,16 @@ const applyFilter = (data, selectedFilter, selectedDueFilter = dueFilter) => {
   }, [filter, dueFilter, allTickets]);
 
   // 🧩 Auto refresh
-useEffect(() => {
-  loadTickets(true);
-  const interval = setInterval(() => {
-    if (document.visibilityState === "visible") {
-      loadTickets(true);
-    }
-  }, 5000);
+  useEffect(() => {
+    loadTickets(true);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadTickets(true);
+      }
+    }, 5000);
 
-  return () => clearInterval(interval);
-}, [filter, dueFilter]);
-
+    return () => clearInterval(interval);
+  }, [filter, dueFilter]);
 
   // 🧩 Update / Reject
   const updateStatus = async (id, newStatus, fixed_note = "") => {
@@ -500,23 +496,27 @@ useEffect(() => {
                           ? new Date(t.end_date).toLocaleDateString("en-IN")
                           : "—"}
                       </td>
-                     <td>
-  {t.status === "COMPLETE" ? (
-    <span className="fw-semibold text-success"> Done</span>
-  ) : (
-    <span
-      className={`fw-semibold ${
-        t.daysLeft.includes("Overdue") || t.daysLeft.includes("Due today")
-          ? "text-danger" // 🔴 Red for overdue / due today
-          : t.daysLeft.includes("left")
-          ? "text-warning" // 🟡 Yellow for X days left
-          : "text-muted"
-      }`}
-    >
-      {t.daysLeft}
-    </span>
-  )}
-</td>
+                      <td>
+                        {t.status === "COMPLETE" ? (
+                          <span className="fw-semibold text-success">
+                            {" "}
+                            Done
+                          </span>
+                        ) : (
+                          <span
+                            className={`fw-semibold ${
+                              t.daysLeft.includes("Overdue") ||
+                              t.daysLeft.includes("Due today")
+                                ? "text-danger" // 🔴 Red for overdue / due today
+                                : t.daysLeft.includes("left")
+                                ? "text-warning" // 🟡 Yellow for X days left
+                                : "text-muted"
+                            }`}
+                          >
+                            {t.daysLeft}
+                          </span>
+                        )}
+                      </td>
 
                       <td>
                         <span
@@ -559,134 +559,144 @@ useEffect(() => {
         </div>
       </div>
 
-  {/* ACTION MODAL */}
-{showActionModal && currentTicket && (
-  <div className="modal fade show d-block" tabIndex="-1">
-    <div className="modal-dialog modal-dialog-centered">
-      <div className="modal-content">
-        <div className="modal-header bg-dark text-white">
-          <h5 className="modal-title">
-            Actions — Ticket {currentTicket.id}
-          </h5>
-          <button
-            className="btn-close"
-            onClick={() => setShowActionModal(false)}
-          ></button>
+      {/* ACTION MODAL */}
+      {showActionModal && currentTicket && (
+        <div className="modal fade show d-block" tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-dark text-white">
+                <h5 className="modal-title">
+                  Actions — Ticket {currentTicket.id}
+                </h5>
+                <button
+                  className="btn-close"
+                  onClick={() => setShowActionModal(false)}
+                ></button>
+              </div>
+
+              <div className="modal-body d-flex flex-wrap gap-2 justify-content-center">
+                {/* 🔹 Not Started */}
+                {currentTicket.status === "ASSIGNED" ? (
+                  <button
+                    className="btn btn-info"
+                    onClick={() => {
+                      setShowActionModal(false);
+                      updateStatus(currentTicket.id, "NOT_STARTED");
+                    }}
+                  >
+                    Not Started
+                  </button>
+                ) : (
+                  <button className="btn btn-outline-info" disabled>
+                    Not Started
+                  </button>
+                )}
+
+                {/* 🔹 In Process */}
+                {currentTicket.status === "NOT_STARTED" ? (
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setShowActionModal(false);
+                      updateStatus(currentTicket.id, "INPROCESS");
+                    }}
+                  >
+                    In Process
+                  </button>
+                ) : (
+                  <button className="btn btn-outline-primary" disabled>
+                    In Process
+                  </button>
+                )}
+
+                {/* 🔹 Complete */}
+                {currentTicket.status === "INPROCESS" ? (
+                  <button
+                    className="btn btn-success"
+                    onClick={() => {
+                      setShowActionModal(false);
+                      setShowCompleteModal(true);
+                    }}
+                  >
+                    Complete
+                  </button>
+                ) : (
+                  <button className="btn btn-outline-success" disabled>
+                    Complete
+                  </button>
+                )}
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowActionModal(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+      )}
 
-        <div className="modal-body d-flex flex-wrap gap-2 justify-content-center">
-          {/* 🔹 Not Started */}
-          {currentTicket.status === "ASSIGNED" ? (
-            <button
-              className="btn btn-info"
-              onClick={() => {
-                setShowActionModal(false);
-                updateStatus(currentTicket.id, "NOT_STARTED");
-              }}
-            >
-              Not Started
-            </button>
-          ) : (
-            <button className="btn btn-outline-info" disabled>
-              Not Started
-            </button>
-          )}
+      {/* VIEW MODAL */}
+      {showDetailModal && currentTicket && (
+        <div className="modal fade show d-block" tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-secondary text-white">
+                <h5 className="modal-title">Ticket Details</h5>
+                <button
+                  className="btn-close"
+                  onClick={() => setShowDetailModal(false)}
+                ></button>
+              </div>
 
-          {/* 🔹 In Process */}
-          {currentTicket.status === "NOT_STARTED" ? (
-            <button
-              className="btn btn-primary"
-              onClick={() => {
-                setShowActionModal(false);
-                updateStatus(currentTicket.id, "INPROCESS");
-              }}
-            >
-              In Process
-            </button>
-          ) : (
-            <button className="btn btn-outline-primary" disabled>
-              In Process
-            </button>
-          )}
+              <div className="modal-body">
+                <p>
+                  <strong>Assigned By:</strong> {currentTicket.reporting_to}
+                </p>
+                <p>
+                  <strong>Employee:</strong> {currentTicket.full_name}
+                </p>
+                <p>
+                  <strong>Department:</strong> {currentTicket.department}
+                </p>
+                <p>
+                  <strong>Issue:</strong> {currentTicket.issue_text}
+                </p>
+                <p>
+                  <strong>Status:</strong> {currentTicket.status}
+                </p>
+              </div>
 
-          {/* 🔹 Complete */}
-          {currentTicket.status === "INPROCESS" ? (
-            <button
-              className="btn btn-success"
-              onClick={() => {
-                setShowActionModal(false);
-                setShowCompleteModal(true);
-              }}
-            >
-              Complete
-            </button>
-          ) : (
-            <button className="btn btn-outline-success" disabled>
-              Complete
-            </button>
-          )}
+              {/* 🔹 Footer with Reject + Close */}
+              <div className="modal-footer d-flex justify-content-between">
+                <button
+                  className="btn btn-danger"
+                  disabled={["REJECTED", "COMPLETE"].includes(
+                    currentTicket.status
+                  )}
+                  onClick={() => {
+                    setShowDetailModal(false);
+                    setShowRejectModal(true);
+                  }}
+                >
+                  Reject
+                </button>
+
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowDetailModal(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-
-        <div className="modal-footer">
-          <button
-            className="btn btn-secondary"
-            onClick={() => setShowActionModal(false)}
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-
-
-   {/* VIEW MODAL */}
-{showDetailModal && currentTicket && (
-  <div className="modal fade show d-block" tabIndex="-1">
-    <div className="modal-dialog modal-dialog-centered">
-      <div className="modal-content">
-        <div className="modal-header bg-secondary text-white">
-          <h5 className="modal-title">Ticket Details</h5>
-          <button
-            className="btn-close"
-            onClick={() => setShowDetailModal(false)}
-          ></button>
-        </div>
-
-        <div className="modal-body">
-          <p><strong>Assigned By:</strong> {currentTicket.reporting_to}</p>
-          <p><strong>Employee:</strong> {currentTicket.full_name}</p>
-          <p><strong>Department:</strong> {currentTicket.department}</p>
-          <p><strong>Issue:</strong> {currentTicket.issue_text}</p>
-          <p><strong>Status:</strong> {currentTicket.status}</p>
-        </div>
-
-        {/* 🔹 Footer with Reject + Close */}
-        <div className="modal-footer d-flex justify-content-between">
-          <button
-            className="btn btn-danger"
-            disabled={["REJECTED", "COMPLETE"].includes(currentTicket.status)}
-            onClick={() => {
-              setShowDetailModal(false);
-              setShowRejectModal(true);
-            }}
-          >
-            Reject
-          </button>
-
-          <button
-            className="btn btn-secondary"
-            onClick={() => setShowDetailModal(false)}
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-
+      )}
 
       {/* COMPLETE MODAL */}
       {showCompleteModal && (

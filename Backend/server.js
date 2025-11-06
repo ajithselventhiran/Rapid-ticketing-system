@@ -358,40 +358,39 @@ app.get("/api/admin/tickets", auth, async (req, res) => {
 });
 
 
-// ADMIN — Notifications: due tickets
-// ======================================================
+// ✅ NEW Notification endpoints using tickets table
 app.get("/api/admin/notifications", auth, async (req, res) => {
   try {
     if (req.user.role !== "ADMIN")
       return res.status(403).json({ error: "Access denied" });
 
     const [rows] = await pool.query(`
-      SELECT
-        n.id, n.ticket_id, n.title, n.message, n.type, n.seen, n.created_at,
-        t.emp_id, t.full_name, t.assigned_to,
-        tech.full_name AS assigned_to_name,
-        t.status, t.end_date, t.remarks
-      FROM notifications n
-      JOIN tickets t ON t.id = n.ticket_id
-      LEFT JOIN users tech
-        ON tech.username = t.assigned_to OR tech.full_name = t.assigned_to
-      WHERE n.type IN ('OVERDUE', 'DUE_TODAY')
-        AND t.reporting_to = ?
-      ORDER BY 
-        CASE n.type 
-          WHEN 'OVERDUE' THEN 1
-          WHEN 'DUE_TODAY' THEN 2
-          ELSE 3
-        END,
-        n.created_at DESC
+      SELECT id, emp_id, full_name, assigned_to, department,
+             issue_text, remarks, end_date, status, notification
+      FROM tickets
+      WHERE reporting_to = ?
+      ORDER BY notification ASC, id DESC
     `, [req.user.display_name]);
 
     res.json(rows);
   } catch (e) {
-    console.error("❌ Notifications load failed:", e);
+    console.error("❌ Notification fetch error:", e);
     res.status(500).json({ error: "Failed to load notifications" });
   }
 });
+
+app.patch("/api/admin/tickets/:id/seen", auth, async (req, res) => {
+  try {
+    await pool.query(
+      "UPDATE tickets SET notification = TRUE WHERE id = ?",
+      [req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to update notification flag" });
+  }
+});
+
 
 
 
