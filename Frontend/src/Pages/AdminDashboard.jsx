@@ -162,7 +162,10 @@ export default function AdminDashboard() {
   }, [pendingScroll, scrollTarget, currentPage]);
 
   const indexOfLast = currentPage * ticketsPerPage;
-  const currentTickets = tickets.slice(indexOfLast - ticketsPerPage, indexOfLast);
+  const currentTickets = tickets.slice(
+    indexOfLast - ticketsPerPage,
+    indexOfLast
+  );
   const totalPages = Math.ceil(tickets.length / ticketsPerPage);
 
   const loadTickets = async (silent = false) => {
@@ -252,6 +255,67 @@ export default function AdminDashboard() {
       COMPLETE: "bg-success",
       REJECTED: "bg-danger",
     }[s?.toUpperCase()] || "bg-secondary");
+
+  // ✅ Add this function below your useState declarations
+  const closeModal = () => {
+    setShowModal(false); // Hide Assign modal
+    setSelectedTicket(null); // Reset selected ticket
+    setSelectedTechnician(""); // Clear technician
+    setStartDate(""); // Clear start date
+    setEndDate(""); // Clear end date
+    setPriority(""); // Clear priority
+    setRemarks(""); // Clear remarks
+  };
+
+  // ✅ Assign Ticket Function
+  const assign = async () => {
+    if (!selectedTicket) return showToast("warning", "No ticket selected!");
+    if (!selectedTechnician)
+      return showToast("warning", "Please select a technician!");
+    if (!startDate || !endDate)
+      return showToast("warning", "Please select start and end dates!");
+    if (!priority) return showToast("warning", "Please choose priority!");
+
+    try {
+      setMailLoading(true);
+      setMailMessage("Assigning ticket...");
+
+      const res = await fetch(
+        `${API}/api/admin/tickets/${selectedTicket.id}/assign`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            assigned_to: selectedTechnician,
+            start_date: startDate,
+            end_date: endDate,
+            priority,
+            remarks,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showToast("danger", data?.error || "Failed to assign ticket");
+        return;
+      }
+
+      showToast("success", "✅ Ticket assigned successfully!");
+      await loadTickets(true);
+      await loadCounts();
+      closeModal(); // close modal after assign
+    } catch (err) {
+      console.error("❌ Assign error:", err);
+      showToast("danger", "Server error during assignment");
+    } finally {
+      setMailLoading(false);
+    }
+  };
 
   // ========== START UI ==============
   return (
@@ -374,10 +438,20 @@ export default function AdminDashboard() {
 
       {/* STATUS CARDS */}
       <div className="d-flex flex-wrap justify-content-center gap-3 mb-3">
-        {["ALL","NOT_ASSIGNED","ASSIGNED","NOT_STARTED","INPROCESS","COMPLETE","REJECTED"].map((key) => (
+        {[
+          "ALL",
+          "NOT_ASSIGNED",
+          "ASSIGNED",
+          "NOT_STARTED",
+          "INPROCESS",
+          "COMPLETE",
+          "REJECTED",
+        ].map((key) => (
           <div
             key={key}
-            className={`text-center text-white p-3 shadow-sm ${getStatusBadge(key)}`}
+            className={`text-center text-white p-3 shadow-sm ${getStatusBadge(
+              key
+            )}`}
             style={{ borderRadius: "12px", width: "12%", minWidth: "120px" }}
           >
             <h6 className="fw-semibold text-uppercase small mb-1">
@@ -390,7 +464,15 @@ export default function AdminDashboard() {
 
       {/* FILTER BUTTONS */}
       <div className="d-flex flex-wrap justify-content-center gap-3 mb-5">
-        {["ALL","NOT_ASSIGNED","ASSIGNED","NOT_STARTED","INPROCESS","COMPLETE","REJECTED"].map((s) => (
+        {[
+          "ALL",
+          "NOT_ASSIGNED",
+          "ASSIGNED",
+          "NOT_STARTED",
+          "INPROCESS",
+          "COMPLETE",
+          "REJECTED",
+        ].map((s) => (
           <div key={s} className="text-center" style={{ width: "12%" }}>
             <button
               className={`btn btn-sm w-100 fw-semibold ${
@@ -473,7 +555,11 @@ export default function AdminDashboard() {
                         <td>{t.department}</td>
                         <td>{t.system_ip || "-"}</td>
                         <td>
-                          <span className={`badge ${getStatusBadge(t.status)} px-3 py-2`}>
+                          <span
+                            className={`badge ${getStatusBadge(
+                              t.status
+                            )} px-3 py-2`}
+                          >
                             {t.status || "Not Assigned"}
                           </span>
                         </td>
@@ -503,8 +589,12 @@ export default function AdminDashboard() {
                                     ? new Date(t.end_date).toLocaleDateString()
                                     : "N/A";
                                   setReminderMessage(
-                                    `Dear ${t.assigned_to || "Technician"},\n\nThis is a kind reminder regarding the following issue:\n\n"${
-                                      t.remarks || t.issue_text || "No issue mentioned"
+                                    `Dear ${
+                                      t.assigned_to || "Technician"
+                                    },\n\nThis is a kind reminder regarding the following issue:\n\n"${
+                                      t.remarks ||
+                                      t.issue_text ||
+                                      "No issue mentioned"
                                     }".\n\nIt was due on ${dueDate}. Please review and complete it as soon as possible.\n\n- ${managerName}`
                                   );
                                   setShowReminderModal(true);
@@ -519,6 +609,7 @@ export default function AdminDashboard() {
                                   disabled={t.status !== "NOT_ASSIGNED"}
                                   onClick={() => {
                                     setSelectedTicket(t);
+                                    setStartDate(new Date().toISOString().split("T")[0]);
                                     setShowModal(true);
                                   }}
                                 >
@@ -556,13 +647,20 @@ export default function AdminDashboard() {
                 key={i}
                 className={`page-item ${currentPage === i + 1 ? "active" : ""}`}
               >
-                <button className="page-link" onClick={() => setCurrentPage(i + 1)}>
+                <button
+                  className="page-link"
+                  onClick={() => setCurrentPage(i + 1)}
+                >
                   {i + 1}
                 </button>
               </li>
             ))}
 
-            <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+            <li
+              className={`page-item ${
+                currentPage === totalPages ? "disabled" : ""
+              }`}
+            >
               <button
                 className="page-link"
                 onClick={() =>
@@ -578,18 +676,28 @@ export default function AdminDashboard() {
 
       {/* ISSUE MODAL */}
       {showIssueModal && selectedTicket && (
-        <div className="modal fade show d-block" style={{ background: "rgba(0,0,0,0.5)" }}>
+        <div
+          className="modal fade show d-block"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content border-0 shadow-lg rounded-4">
               <div className="modal-header bg-info text-white rounded-top-4">
-                <h5 className="modal-title">Issue Details — {selectedTicket.emp_id}</h5>
-                <button className="btn-close" onClick={() => setShowIssueModal(false)}></button>
+                <h5 className="modal-title">
+                  Issue Details — {selectedTicket.emp_id}
+                </h5>
+                <button
+                  className="btn-close"
+                  onClick={() => setShowIssueModal(false)}
+                ></button>
               </div>
 
               <div className="d-flex justify-content-center gap-2 mt-3">
                 <button
                   className={`btn btn-sm fw-semibold ${
-                    viewMode === "ticket" ? "btn-primary text-white" : "btn-outline-primary"
+                    viewMode === "ticket"
+                      ? "btn-primary text-white"
+                      : "btn-outline-primary"
                   }`}
                   onClick={() => setViewMode("ticket")}
                 >
@@ -598,7 +706,9 @@ export default function AdminDashboard() {
 
                 <button
                   className={`btn btn-sm fw-semibold ${
-                    viewMode === "assign" ? "btn-primary text-white" : "btn-outline-primary"
+                    viewMode === "assign"
+                      ? "btn-primary text-white"
+                      : "btn-outline-primary"
                   }`}
                   onClick={() => setViewMode("assign")}
                   disabled={selectedTicket.status === "NOT_ASSIGNED"}
@@ -607,7 +717,10 @@ export default function AdminDashboard() {
                 </button>
               </div>
 
-              <div className="modal-body" style={{ maxHeight: "65vh", overflowY: "auto" }}>
+              <div
+                className="modal-body"
+                style={{ maxHeight: "65vh", overflowY: "auto" }}
+              >
                 {viewMode === "ticket" && (
                   <>
                     <p>
@@ -635,50 +748,73 @@ export default function AdminDashboard() {
                   </>
                 )}
 
-                {viewMode === "assign" && selectedTicket.status !== "NOT_ASSIGNED" && (
-                  <div
-                    className="p-3 rounded-3"
-                    style={{ background: "rgba(13,110,253,0.08)", border: "1px solid #b6d4fe" }}
-                  >
-                    <h6 className="fw-bold text-primary mb-3">Assignment Details</h6>
-                    <p>
-                      <strong>Technician:</strong> {selectedTicket.assigned_to || "—"}
-                    </p>
-                    <p>
-                      <strong>Start Date:</strong>{" "}
-                      {selectedTicket.start_date
-                        ? new Date(selectedTicket.start_date).toLocaleDateString()
-                        : "—"}
-                    </p>
-                    <p>
-                      <strong>End Date:</strong>{" "}
-                      {selectedTicket.end_date
-                        ? new Date(selectedTicket.end_date).toLocaleDateString()
-                        : "—"}
-                    </p>
-                    <p>
-                      <strong>Priority:</strong> {selectedTicket.priority || "—"}
-                    </p>
-                    <p>
-                      <strong>Remarks:</strong> {selectedTicket.remarks ? selectedTicket.remarks : "—"}
-                    </p>
-                  </div>
-                )}
+                {viewMode === "assign" &&
+                  selectedTicket.status !== "NOT_ASSIGNED" && (
+                    <div
+                      className="p-3 rounded-3"
+                      style={{
+                        background: "rgba(13,110,253,0.08)",
+                        border: "1px solid #b6d4fe",
+                      }}
+                    >
+                      <h6 className="fw-bold text-primary mb-3">
+                        Assignment Details
+                      </h6>
+                      <p>
+                        <strong>Technician:</strong>{" "}
+                        {selectedTicket.assigned_to || "—"}
+                      </p>
+                      <p>
+                        <strong>Start Date:</strong>{" "}
+                        {selectedTicket.start_date
+                          ? new Date(
+                              selectedTicket.start_date
+                            ).toLocaleDateString()
+                          : "—"}
+                      </p>
+                      <p>
+                        <strong>End Date:</strong>{" "}
+                        {selectedTicket.end_date
+                          ? new Date(
+                              selectedTicket.end_date
+                            ).toLocaleDateString()
+                          : "—"}
+                      </p>
+                      <p>
+                        <strong>Priority:</strong>{" "}
+                        {selectedTicket.priority || "—"}
+                      </p>
+                      <p>
+                        <strong>Remarks:</strong>{" "}
+                        {selectedTicket.remarks ? selectedTicket.remarks : "—"}
+                      </p>
+                    </div>
+                  )}
               </div>
 
               <div className="modal-footer d-flex justify-content-between">
                 <button
                   className="btn btn-danger"
-                  disabled={["REJECTED", "ASSIGNED", "COMPLETE"].includes(selectedTicket.status)}
+                  disabled={["REJECTED", "ASSIGNED", "COMPLETE"].includes(
+                    selectedTicket.status
+                  )}
                   onClick={() => {
-                    if (!window.confirm("Are you sure you want to reject this ticket?")) return;
+                    if (
+                      !window.confirm(
+                        "Are you sure you want to reject this ticket?"
+                      )
+                    )
+                      return;
                     handleReject(selectedTicket.id);
                   }}
                 >
                   Reject
                 </button>
 
-                <button className="btn btn-secondary" onClick={() => setShowIssueModal(false)}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowIssueModal(false)}
+                >
                   Close
                 </button>
               </div>
@@ -689,17 +825,24 @@ export default function AdminDashboard() {
 
       {/* ASSIGN MODAL */}
       {showModal && selectedTicket && (
-        <div className="modal fade show d-block" style={{ background: "rgba(0,0,0,0.5)" }}>
+        <div
+          className="modal fade show d-block"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content border-0 shadow-lg rounded-4">
               <div className="modal-header bg-primary text-white rounded-top-4">
-                <h5 className="modal-title">Assign Ticket — {selectedTicket.emp_id}</h5>
+                <h5 className="modal-title">
+                  Assign Ticket — {selectedTicket.emp_id}
+                </h5>
                 <button className="btn-close" onClick={closeModal}></button>
               </div>
               <div className="modal-body">
                 <div className="row g-3">
                   <div className="col-md-12">
-                    <label className="form-label fw-semibold">Assign To (Technician)</label>
+                    <label className="form-label fw-semibold">
+                      Assign To (Technician)
+                    </label>
                     <select
                       className="form-select"
                       value={selectedTechnician}
@@ -707,7 +850,10 @@ export default function AdminDashboard() {
                     >
                       <option value="">Select Technician</option>
                       {technicianList.map((t) => (
-                        <option key={t.username} value={t.name || t.full_name || t.username}>
+                        <option
+                          key={t.username}
+                          value={t.name || t.full_name || t.username}
+                        >
                           {t.name || t.full_name || t.username} ({t.username})
                         </option>
                       ))}
@@ -718,7 +864,7 @@ export default function AdminDashboard() {
                     <input
                       type="date"
                       className="form-control"
-                      value={startDate || new Date().toISOString().split("T")[0]}
+                      value={startDate}
                       min={new Date().toISOString().split("T")[0]}
                       onChange={(e) => setStartDate(e.target.value)}
                     />
@@ -761,7 +907,10 @@ export default function AdminDashboard() {
                 <button className="btn btn-secondary" onClick={closeModal}>
                   Cancel
                 </button>
-                <button className="btn btn-primary" onClick={async () => await assign()}>
+                <button
+                  className="btn btn-primary"
+                  onClick={async () => await assign()}
+                >
                   Assign
                 </button>
               </div>
@@ -772,7 +921,10 @@ export default function AdminDashboard() {
 
       {/* REMINDER MODAL */}
       {showReminderModal && reminderTicket && (
-        <div className="modal fade show d-block" style={{ background: "rgba(0,0,0,0.5)" }}>
+        <div
+          className="modal fade show d-block"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content border-0 shadow-lg rounded-4">
               <div className="modal-header bg-info text-white rounded-top-4">
@@ -783,7 +935,9 @@ export default function AdminDashboard() {
                   className="btn-close"
                   onClick={() => {
                     setShowReminderModal(false);
-                    setReminderMessage("Please complete the assigned ticket soon.");
+                    setReminderMessage(
+                      "Please complete the assigned ticket soon."
+                    );
                   }}
                 ></button>
               </div>
@@ -806,7 +960,9 @@ export default function AdminDashboard() {
                   className="btn btn-secondary"
                   onClick={() => {
                     setShowReminderModal(false);
-                    setReminderMessage("Please complete the assigned ticket soon.");
+                    setReminderMessage(
+                      "Please complete the assigned ticket soon."
+                    );
                   }}
                 >
                   Cancel
@@ -832,17 +988,28 @@ export default function AdminDashboard() {
                       );
                       const data = await res.json();
                       if (res.ok) {
-                        showToast("success", `✅ Reminder sent to ${reminderTicket.assigned_to}`);
+                        showToast(
+                          "success",
+                          `✅ Reminder sent to ${reminderTicket.assigned_to}`
+                        );
                       } else {
-                        showToast("danger", data?.error || "Failed to send reminder");
+                        showToast(
+                          "danger",
+                          data?.error || "Failed to send reminder"
+                        );
                       }
                     } catch (err) {
                       console.error("❌ Reminder error:", err);
-                      showToast("danger", "Server error while sending reminder");
+                      showToast(
+                        "danger",
+                        "Server error while sending reminder"
+                      );
                     } finally {
                       setMailLoading(false);
                       setShowReminderModal(false);
-                      setReminderMessage("Please complete the assigned ticket soon.");
+                      setReminderMessage(
+                        "Please complete the assigned ticket soon."
+                      );
                     }
                   }}
                 >
@@ -860,7 +1027,11 @@ export default function AdminDashboard() {
           className="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center"
           style={{ background: "rgba(255,255,255,0.8)", zIndex: 2000 }}
         >
-          <div className="spinner-border text-primary mb-3" style={{ width: "3rem", height: "3rem" }} role="status"></div>
+          <div
+            className="spinner-border text-primary mb-3"
+            style={{ width: "3rem", height: "3rem" }}
+            role="status"
+          ></div>
           <p className="fw-semibold text-primary">{mailMessage}</p>
         </div>
       )}
@@ -871,11 +1042,23 @@ export default function AdminDashboard() {
           className="position-fixed top-50 start-50 translate-middle text-success"
           style={{ zIndex: 3000, animation: "pop 1s ease" }}
         >
-          <i className="bi bi-check-circle-fill" style={{ fontSize: "4rem", animation: "zoomIn 0.5s ease" }}></i>
+          <i
+            className="bi bi-check-circle-fill"
+            style={{ fontSize: "4rem", animation: "zoomIn 0.5s ease" }}
+          ></i>
         </div>
       )}
 
-      <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop closeOnClick pauseOnHover draggable theme="colored" />
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        pauseOnHover
+        draggable
+        theme="colored"
+      />
     </div>
   );
 }

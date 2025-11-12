@@ -448,7 +448,15 @@ export default function TechnicianDashboard() {
         <div className="card-body p-0">
           <div className="table-responsive" style={TABLE_SCROLL_STYLE}>
             <table className="table table-hover align-middle mb-0">
-              <thead className="table-success text-center">
+              <thead
+                className="table-success text-center"
+                style={{
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 5,
+                  background: "#d1e7dd",
+                }}
+              >
                 <tr>
                   <th>Assigned By</th>
                   <th>Start Date</th>
